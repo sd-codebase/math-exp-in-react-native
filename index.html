@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="assets/css/katex.min.css" >
+    <link rel="stylesheet" href="assets/css/site.css">
+</head>
+<body style="margin:0;" id="body">
+    <div id="content" style="height: auto">
+    </div>
+    <script defer src="assets/js/katex.min.js"></script>
+    <script defer src="assets/js/auto-render.min.js" ></script>
+    <script>
+        function splitCellContent(content) {
+            try {
+                const regexToReplaceImgStart = "{{imgcell_";
+                const regexToReplaceImgEnd = "_imgcell}}";
+                const parts = content
+                    .replaceAll(regexToReplaceImgStart, "###IMG_URL_")
+                    .replaceAll(regexToReplaceImgEnd, "###")
+                    .split("###")
+                    .map((part) => {
+                        if (part.startsWith("IMG_URL_")) {
+                            const img = part.replace("IMG_URL_", "");
+                            return { type: "image", img };
+                        }
+                        return { type: "latex", latex: part };
+                    });
+
+                const snippets = parts?.map((snippet) => {
+                    if (snippet.type === "image") {
+                        return `<td>
+                            <div style="margin: 1rem 0">
+                                <img
+                                    height="100"
+                                    width="auto"
+                                    src='https://be.mcq-hub.co.in/resources/assets/${snippet.img}'
+                                />
+                            </div>
+                        </td>`;
+                    }
+
+                    return `
+                        <td>
+                            <div>
+                                <p style="margin: 0;">${snippet.latex}</p>
+                            </div>
+                        </td>
+                    `;
+                })
+                return snippets.join('');
+            } catch (error) {
+                postMessageToWebview({
+                    type: "PARSING_ERROR",
+                    data: {error, content, line: 57},
+                })
+            }
+        }
+
+        function generateRows(rowsContentList) {
+            try {
+                const rows = rowsContentList?.map((row) => {
+                    const cellsList = row?.map(splitCellContent);
+                    return `
+                        <tr>
+                            ${cellsList.join('')}
+                        </tr>
+                    `;
+                });
+                return rows.join('');
+            } catch (error) {
+                postMessageToWebview({
+                    type: "PARSING_ERROR",
+                    data: {error, rowsContentList, line: 76},
+                })
+            }
+        }
+
+        function generateTable(tblContent){
+            try{
+                const tableContentRows = tblContent
+                    .split("\n\\hline\n")
+                    .map((row) => {
+                        const columns = row.split("&");
+                        return columns;
+                    });
+                let rowsHtml = generateRows(tableContentRows)
+                return `
+                    <table class="math-table">
+                        <tbody>${rowsHtml}</tbody>
+                    </table>
+                `;
+            } catch (error) {
+                postMessageToWebview({
+                    type: "PARSING_ERROR",
+                    data: {error, tblContent, line: 98},
+                })
+            }
+        }
+
+        function generateHtml(snippets) {
+            try{
+                const snippetsList = snippets?.map((snippet) => {
+                    if (snippet.type === "image") {
+                        return `
+                            <div style="margin: 1rem 0">
+                                <img
+                                    height="100"
+                                    width="auto"
+                                    src='https://be.mcq-hub.co.in/resources/assets/${snippet.img}'
+                                />
+                            </div>
+                        `;
+                    } else if (snippet.type === "table") {
+                        return generateTable(snippet.tblContent);
+                    } else if (snippet.type === "empty") {
+                        return `<div style="height: 16px, width: 16px"/>`;
+                    }
+                    
+                    return `
+                        <div>
+                            <p style="margin: 0;">${snippet.latex}</p>
+                        </div>
+                    `;
+                })
+                return snippetsList.join('');
+            } catch (error) {
+                postMessageToWebview({
+                    type: "PARSING_ERROR",
+                    data: {error, snippets, line: 132},
+                })
+            }
+        }
+
+        function splitContent(content) {
+            try {
+                const regexToReplaceImgStart = "{{img_";
+                const regexToReplaceImgEnd = "_img}}";
+                const regexToReplaceTableStart = "{{table_";
+                const regexToReplaceTableEnd = "_table}}";
+                const parts = content
+                    .replaceAll("\\nl", "###")
+                    .replaceAll(regexToReplaceImgStart, "###IMG_URL_")
+                    .replaceAll(regexToReplaceImgEnd, "###")
+                    .replaceAll(regexToReplaceTableStart, "###TABEL_")
+                    .replaceAll(regexToReplaceTableEnd, "###")
+                    .split("###")
+                    .map((part) => {
+                        if (part.startsWith("IMG_URL_")) {
+                        const img = part.replace("IMG_URL_", "");
+                        return { type: "image", img };
+                        } else if (part.startsWith("TABEL_")) {
+                        const tblContent = part.replace("TABEL_", "");
+                        return { type: "table", tblContent };
+                        }
+                        if (part.trim() === "") {
+                        return { type: "empty" };
+                        }
+                        return { type: "latex", latex: part };
+                    });
+
+                return generateHtml(parts);
+            } catch (error) {
+                postMessageToWebview({
+                    type: "PARSING_ERROR",
+                    data: {error, content, line: 168},
+                })
+            }
+        }
+        const getHtmlToRender= (mathexp) => {
+            try {
+                const formattedQuestion = mathexp.replace(
+                    "{{INTEGER_ANSWER}}",
+                    "__________"
+                );
+                return splitContent(formattedQuestion);
+            } catch (error) {
+                postMessageToWebview({
+                    type: "PARSING_ERROR",
+                    data: {error, mathexp, line: 183},
+                })
+            }
+        }
+
+        const postMessageToWebview = (eventData) => {
+            console.log(eventData);
+            window.ReactNativeWebView?.postMessage(
+                JSON.stringify(eventData)
+            )
+        };
+
+        const target = document.getElementById('content');
+
+        const resizeObserver = new ResizeObserver(entries => {
+        for (let entry of entries) {
+            const height = entry.contentRect.height;
+            const width = entry.contentRect.width;
+            postMessageToWebview({
+                type: "CONTAINER_HEIGHT",
+                data: {height},
+            })
+        }
+        });
+
+        resizeObserver.observe(target);
+
+        window.onload = (event) => {
+
+            const options = {
+                // customised options
+                // • auto-render specific keys, e.g.:
+                delimiters: [
+                    {left: '$$', right: '$$', display: true},
+                    {left: '$', right: '$', display: false},
+                    {left: '\\(', right: '\\)', display: false},
+                    {left: '\\[', right: '\\]', display: true},
+                    {left: '\\begin{equation}', right: '\\end{equation}', display: true},
+                    {left: '\\begin{align}', right: '\\end{align}', display: true},
+                ],
+                // • rendering keys, e.g.:
+                throwOnError : false
+            }
+
+            if (window?.ReactNativeWebView?.injectedObjectJson()) {
+                const data = JSON.parse(window.ReactNativeWebView.injectedObjectJson());
+                document.getElementById('body').style.backgroundColor = data?.backgroundColor;
+                const htmlToRender = getHtmlToRender(data.mathExp);
+                if(htmlToRender) {
+                    document.getElementById('content').innerHTML = htmlToRender;
+                    renderMathInElement(document.body, options);
+                }
+            }
+        }
+
+
+    </script>
+</body>
+</html></meta>

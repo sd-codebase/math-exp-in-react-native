@@ -1,0 +1,31 @@
+.main-container {
+  display: flex;
+  gap: 1rem;
+}
+
+.main-container .navigation {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+#question {
+  width: 400px;
+}
+
+#question ul.options {
+  list-style-type: none;
+  padding: 0;
+}
+
+@media only screen and (max-width: 425px) {
+  #content {
+    font-size: 0.875rem;
+  }
+}
+
+@media only screen and (max-width: 350px) {
+  #content {
+    font-size: 0.75rem;
+  }
+}
