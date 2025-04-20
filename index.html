@@ -227,7 +227,7 @@
                 document.getElementById('body').style.backgroundColor = data?.backgroundColor;
                 const htmlToRender = getHtmlToRender(data.mathExp);
                 if(htmlToRender) {
-                    document.getElementById('content').innerHTML = htmlToRender;
+                    document.getElementById('content').innerHTML = `<p><p>${htmlToRender}<p></p>`;
                     renderMathInElement(document.body, options);
                 }
             }
